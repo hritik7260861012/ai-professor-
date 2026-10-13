@@ -183,6 +183,22 @@ public class GlobalExceptionHandler {
         .body(ApiError.of(HttpStatus.FORBIDDEN, ex.getMessage(), request.getRequestURI()));
   }
 
+  @ExceptionHandler(ResourceNotFoundException.class)
+  public ResponseEntity<ApiError> handleNotFoundResource(
+      ResourceNotFoundException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.NOT_FOUND)
+        .body(ApiError.of(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI()));
+  }
+
+  @ExceptionHandler(ConflictException.class)
+  public ResponseEntity<ApiError> handleConflict(
+      ConflictException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.CONFLICT)
+        .body(ApiError.of(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI()));
+  }
+
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<ApiError> handleIntegrity(
       DataIntegrityViolationException ex, HttpServletRequest request) {

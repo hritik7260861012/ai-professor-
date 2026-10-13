@@ -3,6 +3,7 @@ import { ScrollToTop } from "./components/ScrollToTop";
 import { Layout } from "./components/layout/Layout";
 import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
+import AdminAcademic from "./pages/AdminAcademic";
 import DashboardPlaceholder from "./pages/DashboardPlaceholder";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -43,6 +44,15 @@ export default function App() {
             }
           />
           <Route path="*" element={<NotFound />} />
+        </Route>
+        <Route
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/admin/academic" element={<AdminAcademic />} />
         </Route>
       </Routes>
     </AuthProvider>

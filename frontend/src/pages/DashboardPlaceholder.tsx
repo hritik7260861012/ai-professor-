@@ -1,11 +1,13 @@
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { academicApi, type Enrollment, type TeachingAssignment } from "../api/client";
+import { ClassBrowser, useMyClasses } from "../components/academic/ClassBrowser";
 import { useAuth } from "../auth/AuthContext";
 import { Alert } from "../components/ui/Alert";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/Card";
 import { Container } from "../components/ui/Layout";
-import { cx } from "../lib/utils";
 
 type RoleKey = "student" | "teacher" | "admin";
 
@@ -17,7 +19,7 @@ interface ModuleSpec {
 const ROLE_CONFIG: Record<RoleKey, { title: string; tagline: string; modules: ModuleSpec[] }> = {
   student: {
     title: "Student dashboard",
-    tagline: "Your courses, deadlines, and AI study help — in one place.",
+    tagline: "Your courses, deadlines, and AI study help - in one place.",
     modules: [
       { name: "My assignments", description: "Upcoming deadlines, submissions, and feedback." },
       { name: "AI tutor", description: "Syllabus-grounded Q&A with escalation to teachers." },
@@ -57,30 +59,38 @@ export default function DashboardPlaceholder() {
 
   return (
     <Container className="py-10 sm:py-14">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Badge variant="success">Phase 2 — signed in as {user.role}</Badge>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-            {config.title}
-          </h1>
+          <Badge variant="success">Signed in as {user.role}</Badge>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{config.title}</h1>
           <p className="mt-2 text-lg text-slate-600">{config.tagline}</p>
           <p className="mt-1 text-sm text-slate-500">
             {user.fullName} · {user.email}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => void logout()}>
-            Sign out
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => void logout()}>
+          Sign out
+        </Button>
       </div>
 
-      <Alert variant="info" className="mt-6">
-        This is a placeholder dashboard. Authentication and role-based access are
-        live; real course data and AI features arrive in later phases — the REST
-        API surface they will consume is already versioned under{" "}
-        <code className="font-mono">/api/v1</code>.
-      </Alert>
+      {user.role === "ADMIN" ? (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Academic structure</CardTitle>
+            <CardDescription>
+              Manage departments, programs, semesters, subjects, classes, enrollments and
+              teaching assignments.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button>
+              <Link to="/admin/academic">Open academic management</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <AcademicSection roleKey={role as RoleKey} />
+      )}
 
       <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {config.modules.map((module) => (
@@ -97,12 +107,97 @@ export default function DashboardPlaceholder() {
           </Card>
         ))}
       </div>
+    </Container>
+  );
+}
 
-      <div className="mt-10 text-center">
-        <Button variant="outline" className={cx()}>
-          <Link to="/">Back to home</Link>
+/**
+ * Role-scoped academic overview.
+ *
+ * <p>Students see their enrolled classes and subjects; teachers see the
+ * classes and subjects assigned to them. Both come from the scoped
+ * endpoints, so the UI never has to filter anything itself.
+ */
+function AcademicSection({ roleKey }: { roleKey: RoleKey }) {
+  const { classes, loading, error, reload } = useMyClasses();
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [assignments, setAssignments] = useState<TeachingAssignment[]>([]);
+
+  const loadExtras = useCallback(async () => {
+    if (roleKey === "student") {
+      try {
+        setEnrollments(await academicApi.myEnrollments());
+      } catch {
+        setEnrollments([]);
+      }
+    }
+    if (roleKey === "teacher") {
+      try {
+        setAssignments(await academicApi.myAssignments());
+      } catch {
+        setAssignments([]);
+      }
+    }
+  }, [roleKey]);
+
+  useEffect(() => {
+    void loadExtras();
+  }, [loadExtras]);
+
+  return (
+    <section className="mt-8">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">
+            {roleKey === "student" ? "My classes" : "My teaching assignments"}
+          </h2>
+          <p className="text-sm text-slate-600">
+            {roleKey === "student"
+              ? "Classes you are enrolled in, with the subjects they offer."
+              : "Classes and subjects assigned to you, plus your rosters."}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void reload()}>
+          Refresh
         </Button>
       </div>
-    </Container>
+
+      {error && (
+        <Alert variant="error" className="mb-4">
+          {error}
+        </Alert>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-slate-500">Loading your academic structure…</p>
+      ) : (
+        <>
+          {roleKey === "teacher" && assignments.length > 0 && (
+            <ul className="mb-4 space-y-1">
+              {assignments.map((assignment) => (
+                <li key={assignment.id} className="rounded bg-slate-50 px-3 py-1.5 text-sm">
+                  Teaching {assignment.subjectCode} in {assignment.classCode}
+                </li>
+              ))}
+            </ul>
+          )}
+          {roleKey === "student" && enrollments.length > 0 && (
+            <p className="mb-4 text-sm text-slate-600">
+              You are enrolled in {enrollments.length}{" "}
+              {enrollments.length === 1 ? "class" : "classes"}.
+            </p>
+          )}
+          <ClassBrowser
+            classes={classes}
+            emptyMessage={
+              roleKey === "student"
+                ? "You are not enrolled in any classes yet."
+                : "No classes have been assigned to you yet."
+            }
+            subjectHeading="View subjects"
+          />
+        </>
+      )}
+    </section>
   );
 }

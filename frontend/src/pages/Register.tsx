@@ -1,19 +1,18 @@
 import { FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
-import { ApiError, authApi, RegisterPayload } from "../api/client";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { ApiError } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { Alert } from "../components/ui/Alert";
 import { Button } from "../components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/Card";
 import { Container } from "../components/ui/Layout";
 import { Input } from "../components/ui/Input";
-import { Select } from "../components/ui/Input";
 
 interface FormState {
   fullName: string;
   email: string;
   password: string;
   confirmPassword: string;
-  role: RegisterPayload["role"];
 }
 
 const initialForm: FormState = {
@@ -21,14 +20,16 @@ const initialForm: FormState = {
   email: "",
   password: "",
   confirmPassword: "",
-  role: "STUDENT",
 };
 
-type Status = { kind: "info" | "error"; message: string } | null;
+type Status = { kind: "error" | "success"; message: string } | null;
 
 type FormErrors = Partial<Record<keyof FormState, string>>;
 
 export default function Register() {
+  const { user, register } = useAuth();
+  const navigate = useNavigate();
+
   const [form, setForm] = useState<FormState>(initialForm);
   const [errors, setErrors] = useState<FormErrors>({});
   const [status, setStatus] = useState<Status>(null);
@@ -52,9 +53,6 @@ export default function Register() {
     if (form.confirmPassword !== form.password) {
       next.confirmPassword = "Passwords do not match";
     }
-    if (!["STUDENT", "TEACHER", "ADMIN"].includes(form.role)) {
-      next.role = "Choose a valid role";
-    }
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -66,30 +64,30 @@ export default function Register() {
 
     setSubmitting(true);
     try {
-      // Phase 1: the server validates the payload and responds 501.
-      // Account creation (password hashing, verification email) is Phase 2.
-      await authApi.register({
+      // No role is sent: the public endpoint always creates a STUDENT.
+      // TEACHER and ADMIN accounts are provisioned by an administrator.
+      const created = await register({
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         password: form.password,
-        role: form.role,
       });
-      setStatus({ kind: "info", message: "Account created." });
+      setStatus({
+        kind: "success",
+        message: `Student account created for ${created.email}. Sign in to continue.`,
+      });
+      navigate("/login", { replace: true });
     } catch (error) {
-      if (error instanceof ApiError && error.status === 501) {
-        setStatus({
-          kind: "info",
-          message:
-            "Your input passed server-side validation, but registration goes live in Phase 2 — no account was created.",
-        });
-      } else if (error instanceof ApiError) {
+      if (error instanceof ApiError) {
         setStatus({ kind: "error", message: error.message });
       } else {
         setStatus({ kind: "error", message: "Something unexpected happened. Please try again." });
       }
-    } finally {
       setSubmitting(false);
     }
+  }
+
+  if (user) {
+    return <Navigate to="/login" replace />;
   }
 
   return (
@@ -97,16 +95,16 @@ export default function Register() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Create your account</CardTitle>
-          <CardDescription>Join AI Professor Assistant as a teacher, student, or admin</CardDescription>
+          <CardDescription>Sign up for a student account on AI Professor Assistant</CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="info" className="mb-5">
-            Phase 1 preview — registration is not wired up yet. The form is fully
-            validated, and the API round-trip is exercised end to end.
+            Public sign-up creates a <strong>student</strong> account. Teacher and
+            administrator accounts are created by your college administrator.
           </Alert>
 
           {status && (
-            <Alert variant={status.kind === "error" ? "error" : "info"} className="mb-5">
+            <Alert variant={status.kind === "error" ? "error" : "success"} className="mb-5">
               {status.message}
             </Alert>
           )}
@@ -150,24 +148,8 @@ export default function Register() {
                 setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
               }
             />
-            <Select
-              label="I am a…"
-              value={form.role}
-              error={errors.role}
-              options={[
-                { value: "STUDENT", label: "Student" },
-                { value: "TEACHER", label: "Teacher" },
-                { value: "ADMIN", label: "Administrator" },
-              ]}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  role: event.target.value as RegisterPayload["role"],
-                }))
-              }
-            />
             <Button type="submit" size="lg" className="w-full" disabled={submitting}>
-              {submitting ? "Creating account…" : "Create account"}
+              {submitting ? "Creating account…" : "Create student account"}
             </Button>
           </form>
 

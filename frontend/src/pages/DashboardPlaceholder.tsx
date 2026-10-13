@@ -1,4 +1,5 @@
-import { Navigate, Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { Alert } from "../components/ui/Alert";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -45,41 +46,40 @@ const ROLE_CONFIG: Record<RoleKey, { title: string; tagline: string; modules: Mo
 
 export default function DashboardPlaceholder() {
   const { role } = useParams<{ role: string }>();
+  const { user, logout } = useAuth();
   const config = (Object.keys(ROLE_CONFIG) as RoleKey[]).includes(role as RoleKey)
     ? ROLE_CONFIG[role as RoleKey]
     : null;
 
-  if (!config) {
-    return <Navigate to="/" replace />;
+  if (!config || !user) {
+    return null;
   }
-
-  const others = (Object.keys(ROLE_CONFIG) as RoleKey[]).filter((key) => key !== role);
 
   return (
     <Container className="py-10 sm:py-14">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <Badge variant="warning">Phase 1 placeholder</Badge>
+          <Badge variant="success">Phase 2 — signed in as {user.role}</Badge>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
             {config.title}
           </h1>
           <p className="mt-2 text-lg text-slate-600">{config.tagline}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {user.fullName} · {user.email}
+          </p>
         </div>
-        <div className="flex gap-2" aria-label="Switch role preview">
-          {others.map((other) => (
-            <Button key={other} variant="outline" size="sm">
-              <Link to={`/dashboard/${other}`} className="capitalize">
-                {other} view
-              </Link>
-            </Button>
-          ))}
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => void logout()}>
+            Sign out
+          </Button>
         </div>
       </div>
 
       <Alert variant="info" className="mt-6">
-        This is a placeholder dashboard. Authentication, real data, and AI features are
-        delivered in later phases — the REST API surface they will consume is already
-        versioned under <code className="font-mono">/api/v1</code>.
+        This is a placeholder dashboard. Authentication and role-based access are
+        live; real course data and AI features arrive in later phases — the REST
+        API surface they will consume is already versioned under{" "}
+        <code className="font-mono">/api/v1</code>.
       </Alert>
 
       <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
+import { dashboardPathFor, useAuth } from "../../auth/AuthContext";
 import { cx } from "../../lib/utils";
 import { Button } from "../ui/Button";
 
-const navLinks = [
+const publicLinks = [
   { to: "/#features", label: "Features", external: true },
   { to: "/#roles", label: "Roles", external: true },
-  { to: "/login", label: "Sign in" },
 ];
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const menuRef = useRef<HTMLDivElement>(null);
+  const { user, logout } = useAuth();
 
   // Close the mobile menu on navigation.
   useEffect(() => {
@@ -49,41 +50,50 @@ export function Navbar() {
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
-          {navLinks.map((link) =>
-            link.external ? (
-              <a
-                key={link.label}
-                href={link.to}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              >
-                {link.label}
-              </a>
-            ) : (
-              <NavLink
-                key={link.label}
-                to={link.to}
-                className={({ isActive }) =>
-                  cx(
-                    "rounded-lg px-3 py-2 text-sm font-medium",
-                    isActive
-                      ? "bg-brand-50 text-brand-700"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-                  )
-                }
-              >
-                {link.label}
-              </NavLink>
-            ),
+          {publicLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.to}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            >
+              {link.label}
+            </a>
+          ))}
+          {user && (
+            <NavLink
+              to={dashboardPathFor(user.role)}
+              className={({ isActive }) =>
+                cx(
+                  "rounded-lg px-3 py-2 text-sm font-medium",
+                  isActive
+                    ? "bg-brand-50 text-brand-700"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                )
+              }
+            >
+              Dashboard
+            </NavLink>
           )}
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <Link to="/login">Sign in</Link>
-          </Button>
-          <Button variant="primary" size="sm" className="hidden sm:inline-flex">
-            <Link to="/register">Get started</Link>
-          </Button>
+          {user ? (
+            <>
+              <span className="text-sm text-slate-600">{user.fullName}</span>
+              <Button variant="outline" size="sm" onClick={() => void logout()}>
+                Sign out
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" className="hidden sm:inline-flex">
+                <Link to="/login">Sign in</Link>
+              </Button>
+              <Button variant="primary" size="sm" className="hidden sm:inline-flex">
+                <Link to="/register">Get started</Link>
+              </Button>
+            </>
+          )}
         </div>
 
         <div className="md:hidden" ref={menuRef}>
@@ -120,38 +130,53 @@ export function Navbar() {
       {open && (
         <div id="mobile-menu" className="border-t border-slate-200 bg-white md:hidden">
           <nav className="space-y-1 px-4 py-3" aria-label="Mobile">
-            {navLinks.map((link) =>
-              link.external ? (
-                <a
-                  key={link.label}
-                  href={link.to}
-                  onClick={() => setOpen(false)}
-                  className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  {link.label}
-                </a>
-              ) : (
-                <NavLink
-                  key={link.label}
-                  to={link.to}
-                  className={({ isActive }) =>
-                    cx(
-                      "block rounded-lg px-3 py-2.5 text-sm font-medium",
-                      isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
-                    )
-                  }
-                >
-                  {link.label}
-                </NavLink>
-              ),
+            {publicLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.to}
+                onClick={() => setOpen(false)}
+                className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                {link.label}
+              </a>
+            ))}
+            {user && (
+              <NavLink
+                to={dashboardPathFor(user.role)}
+                onClick={() => setOpen(false)}
+                className={({ isActive }) =>
+                  cx(
+                    "block rounded-lg px-3 py-2.5 text-sm font-medium",
+                    isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
+                  )
+                }
+              >
+                Dashboard
+              </NavLink>
             )}
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" size="sm" className="flex-1">
-                <Link to="/login">Sign in</Link>
-              </Button>
-              <Button variant="primary" size="sm" className="flex-1">
-                <Link to="/register">Get started</Link>
-              </Button>
+              {user ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    setOpen(false);
+                    void logout();
+                  }}
+                >
+                  Sign out
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outline" size="sm" className="flex-1">
+                    <Link to="/login">Sign in</Link>
+                  </Button>
+                  <Button variant="primary" size="sm" className="flex-1">
+                    <Link to="/register">Get started</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </nav>
         </div>

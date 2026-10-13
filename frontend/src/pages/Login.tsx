@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
-import { ApiError, authApi } from "../api/client";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { ApiError } from "../api/client";
+import { dashboardPathFor, useAuth } from "../auth/AuthContext";
 import { Alert } from "../components/ui/Alert";
 import { Button } from "../components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/Card";
@@ -12,13 +13,21 @@ interface FormState {
   password: string;
 }
 
-type Status = { kind: "info" | "error"; message: string } | null;
+type Status = { kind: "info" | "error" | "success"; message: string } | null;
 
 export default function Login() {
+  const { user, loading, login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [form, setForm] = useState<FormState>({ email: "", password: "" });
   const [errors, setErrors] = useState<Partial<FormState>>({});
   const [status, setStatus] = useState<Status>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Where to go after a successful sign-in: the originally requested page,
+  // or the dashboard matching the account's role.
+  const from = (location.state as { from?: string } | null)?.from;
 
   function validate(): boolean {
     const next: Partial<FormState> = {};
@@ -29,8 +38,6 @@ export default function Login() {
     }
     if (!form.password) {
       next.password = "Password is required";
-    } else if (form.password.length < 8) {
-      next.password = "Password must be at least 8 characters";
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -43,25 +50,35 @@ export default function Login() {
 
     setSubmitting(true);
     try {
-      // Phase 1: the server validates the payload and responds 501.
-      // Full authentication is implemented in Phase 2.
-      await authApi.login({ email: form.email.trim(), password: form.password });
-      setStatus({ kind: "info", message: "Signed in." });
+      const signedIn = await login({
+        email: form.email.trim(),
+        password: form.password,
+      });
+      setStatus({ kind: "success", message: "Signed in." });
+      navigate(from ?? dashboardPathFor(signedIn.role), { replace: true });
     } catch (error) {
-      if (error instanceof ApiError && error.status === 501) {
-        setStatus({
-          kind: "info",
-          message:
-            "Your input passed server-side validation, but sign-in goes live in Phase 2 — no session was created.",
-        });
-      } else if (error instanceof ApiError) {
+      if (error instanceof ApiError) {
+        // 403 = suspended account; 401 = bad credentials. Both are the
+        // server's message, which is safe to show verbatim.
         setStatus({ kind: "error", message: error.message });
       } else {
         setStatus({ kind: "error", message: "Something unexpected happened. Please try again." });
       }
-    } finally {
       setSubmitting(false);
     }
+  }
+
+  if (loading) {
+    return (
+      <Container className="py-24 text-center text-sm text-slate-600">
+        Checking your session…
+      </Container>
+    );
+  }
+
+  // Already signed in — never show the login form again.
+  if (user) {
+    return <Navigate to={dashboardPathFor(user.role)} replace />;
   }
 
   return (
@@ -72,13 +89,11 @@ export default function Login() {
           <CardDescription>Sign in to your AI Professor Assistant account</CardDescription>
         </CardHeader>
         <CardContent>
-          <Alert variant="info" className="mb-5">
-            Phase 1 preview — sign-in is not wired up yet. The form is fully
-            validated, and the API round-trip is exercised end to end.
-          </Alert>
-
           {status && (
-            <Alert variant={status.kind === "error" ? "error" : "info"} className="mb-5">
+            <Alert
+              variant={status.kind === "error" ? "error" : status.kind === "success" ? "success" : "info"}
+              className="mb-5"
+            >
               {status.message}
             </Alert>
           )}
@@ -100,7 +115,6 @@ export default function Login() {
               placeholder="••••••••"
               value={form.password}
               error={errors.password}
-              hint="At least 8 characters."
               onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
             />
             <Button type="submit" size="lg" className="w-full" disabled={submitting}>
@@ -111,7 +125,7 @@ export default function Login() {
           <p className="mt-5 text-center text-sm text-slate-600">
             New to campus?{" "}
             <Link to="/register" className="font-semibold text-brand-600 hover:text-brand-700">
-              Create an account
+              Create a student account
             </Link>
           </p>
         </CardContent>

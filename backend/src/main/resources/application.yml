@@ -1,5 +1,16 @@
 server:
   port: ${SERVER_PORT:8080}
+  servlet:
+    session:
+      # Session cookies expire after 30 minutes of inactivity.
+      timeout: ${SESSION_TIMEOUT:30m}
+      cookie:
+        http-only: true
+        # Lax prevents the cookie riding along with cross-site POSTs
+        # (CSRF defence in depth) while allowing top-level navigation.
+        same-site: lax
+        # Set to true in production when TLS is terminated in front of the app.
+        secure: ${SESSION_COOKIE_SECURE:false}
 
 spring:
   application:
@@ -27,12 +38,19 @@ app:
     version: 1.0.0
     title: AI Professor Assistant API
     description: >-
-      REST API for the AI Professor Assistant platform. Phase 1 delivers project
-      scaffolding, a health endpoint, consistent structured errors, API
-      documentation, and the initial database schema. Authentication, courses,
-      assignments and AI features are planned for later phases.
+      REST API for the AI Professor Assistant platform. Phase 1 delivered project
+      scaffolding, a health endpoint, consistent structured errors, API documentation
+      and the initial database schema. Phase 2 adds authentication (BCrypt, session
+      cookies, CSRF) and role-based access control for ADMIN, TEACHER and STUDENT.
+      Courses, assignments and AI features are planned for later phases.
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  bootstrap:
+    admin:
+      # Initial admin account created on startup when both are set.
+      # Never commit real values — supply via the environment.
+      email: ${APP_BOOTSTRAP_ADMIN_EMAIL:}
+      password: ${APP_BOOTSTRAP_ADMIN_PASSWORD:}
 
 springdoc:
   api-docs:

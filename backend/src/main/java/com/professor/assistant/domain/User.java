@@ -14,9 +14,9 @@ import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 
 /**
- * Platform user. Authentication (password hashing, sessions) is
- * intentionally deferred to Phase 2; the entity exists so the schema
- * is validated end-to-end.
+ * Platform user. Passwords are stored as BCrypt hashes only —
+ * never in plaintext. Emails are stored lowercased (normalized)
+ * so lookups are case-insensitive.
  */
 @Entity
 @Table(
@@ -41,6 +41,10 @@ public class User {
   @Column(nullable = false, length = 20)
   private Role role;
 
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 20)
+  private AccountStatus status;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -50,10 +54,20 @@ public class User {
   protected User() {}
 
   public User(String email, String passwordHash, String fullName, Role role) {
+    this(email, passwordHash, fullName, role, AccountStatus.ACTIVE);
+  }
+
+  public User(
+      String email,
+      String passwordHash,
+      String fullName,
+      Role role,
+      AccountStatus status) {
     this.email = email;
     this.passwordHash = passwordHash;
     this.fullName = fullName;
     this.role = role;
+    this.status = status;
   }
 
   @PrePersist
@@ -86,6 +100,18 @@ public class User {
 
   public Role getRole() {
     return role;
+  }
+
+  public void setRole(Role role) {
+    this.role = role;
+  }
+
+  public AccountStatus getStatus() {
+    return status;
+  }
+
+  public void setStatus(AccountStatus status) {
+    this.status = status;
   }
 
   public Instant getCreatedAt() {

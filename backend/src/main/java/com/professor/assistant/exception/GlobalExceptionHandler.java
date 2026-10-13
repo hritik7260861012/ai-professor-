@@ -5,9 +5,14 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -110,6 +115,101 @@ public class GlobalExceptionHandler {
         .status(HttpStatus.NOT_FOUND)
         .body(
             ApiError.of(HttpStatus.NOT_FOUND, "Endpoint not found", request.getRequestURI()));
+  }
+
+  /* ------------------------- security exceptions ------------------------ */
+
+  @ExceptionHandler(BadCredentialsException.class)
+  public ResponseEntity<ApiError> handleBadCredentials(
+      BadCredentialsException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.UNAUTHORIZED)
+        .body(ApiError.of(HttpStatus.UNAUTHORIZED, ex.getMessage(), request.getRequestURI()));
+  }
+
+  @ExceptionHandler(DisabledException.class)
+  public ResponseEntity<ApiError> handleDisabled(
+      DisabledException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.FORBIDDEN)
+        .body(
+            ApiError.of(
+                HttpStatus.FORBIDDEN, "This account has been suspended", request.getRequestURI()));
+  }
+
+  @ExceptionHandler(AccountSuspendedException.class)
+  public ResponseEntity<ApiError> handleAccountSuspended(
+      AccountSuspendedException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.FORBIDDEN)
+        .body(ApiError.of(HttpStatus.FORBIDDEN, ex.getMessage(), request.getRequestURI()));
+  }
+
+  @ExceptionHandler(UsernameNotFoundException.class)
+  public ResponseEntity<ApiError> handleUserNotFound(
+      UsernameNotFoundException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.UNAUTHORIZED)
+        .body(
+            ApiError.of(
+                HttpStatus.UNAUTHORIZED, "Invalid email or password", request.getRequestURI()));
+  }
+
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<ApiError> handleAccessDenied(
+      AccessDeniedException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.FORBIDDEN)
+        .body(
+            ApiError.of(
+                HttpStatus.FORBIDDEN,
+                "You do not have permission to access this resource",
+                request.getRequestURI()));
+  }
+
+  @ExceptionHandler(DuplicateEmailException.class)
+  public ResponseEntity<ApiError> handleDuplicateEmail(
+      DuplicateEmailException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.CONFLICT)
+        .body(ApiError.of(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI()));
+  }
+
+  @ExceptionHandler(PrivilegedRoleException.class)
+  public ResponseEntity<ApiError> handlePrivilegedRole(
+      PrivilegedRoleException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.FORBIDDEN)
+        .body(ApiError.of(HttpStatus.FORBIDDEN, ex.getMessage(), request.getRequestURI()));
+  }
+
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  public ResponseEntity<ApiError> handleIntegrity(
+      DataIntegrityViolationException ex, HttpServletRequest request) {
+    log.warn("Data integrity violation: {}", ex.toString());
+    return ResponseEntity
+        .status(HttpStatus.CONFLICT)
+        .body(
+            ApiError.of(
+                HttpStatus.CONFLICT,
+                "An account with this email address already exists",
+                request.getRequestURI()));
+  }
+
+  @ExceptionHandler(IllegalStateException.class)
+  public ResponseEntity<ApiError> handleIllegalState(
+      IllegalStateException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.CONFLICT)
+        .body(ApiError.of(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI()));
+  }
+
+  @ExceptionHandler(IllegalArgumentException.class)
+  public ResponseEntity<ApiError> handleIllegalArgument(
+      IllegalArgumentException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.NOT_FOUND)
+        .body(ApiError.of(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI()));
   }
 
   @ExceptionHandler(Exception.class)

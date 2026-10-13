@@ -1,83 +1,97 @@
-# Architecture — AI Professor Assistant (Phase 1)
+# Architecture - AI Professor Assistant
 
 ## Overview
 
 AI Professor Assistant is a **web-first** college learning platform for
-teachers, students, and administrators. Phase 1 establishes the project
-foundation; the design intentionally keeps the Android client (Phase 3+)
-possible without any backend rework.
+teachers, students, and administrators, built phase by phase.
+
+| Phase | Delivered |
+| --- | --- |
+| 1 | Project scaffold, health endpoint, `ApiError` envelope, Flyway schema, OpenAPI |
+| 2 | Session authentication (BCrypt), CSRF, ADMIN/TEACHER/STUDENT roles |
+| 3 | Academic structure: departments, programs, years, semesters, subjects, classes, enrollments, teaching assignments |
+| 4 | Syllabus upload, deterministic text extraction, teacher review, student read-only view |
+
+The design keeps the Android client (later phases) possible without any
+backend rework, because everything is a versioned JSON API under `/api/v1`.
 
 ```
-┌────────────────────────┐        HTTPS/JSON         ┌──────────────────────────┐
-│  React + TypeScript    │  ───────────────────────▶ │  Spring Boot 3 (Java 17) │
-│  Vite dev server :5173 │◀───────────────────────   │  REST API /api/v1  :8080 │
-│  (built app: dist/)    │                            │                          │
-└────────────────────────┘                            │   ┌──────────────────┐  │
-        │                                             │   │ Flyway migrations │  │
-        │                                             │   └────────┬─────────┘  │
-        ▼                                             │            ▼            │
-   OpenAPI spec                                        │  ┌──────────────────┐   │
-   /swagger-ui.html                                    │  │ PostgreSQL 15+   │   │
-                                                     │  │ (Supabase-ready) │   │
-                                                     │  └──────────────────┘   │
-                                                     └──────────────────────────┘
+┌──────────────────────┐        HTTPS/JSON        ┌──────────────────────┐
+│  React + TypeScript  │ <──────────────────────> │  Spring Boot 3 (J17) │
+│  Vite dev server     │                          │  REST API /api/v1     │
+│  (built app: dist/)  │                          │                      │
+└──────────────────────┘                          │  ┌────────────────┐  │
+                                                  │  │ Flyway V1..V4  │  │
+   OpenAPI spec                                   │  └───────┬────────┘  │
+   /swagger-ui.html                               │          v           │
+                                                  │  ┌────────────────┐  │
+                                                  │  │ PostgreSQL 15+ │  │
+                                                  │  │ private file   │  │
+                                                  │  │ storage (V4)   │  │
+                                                  │  └────────────────┘  │
+                                                  └──────────────────────┘
 ```
 
 ## Key decisions
 
 | Decision | Rationale |
 | --- | --- |
-| **REST under `/api/v1`** | Versioned prefix lets us evolve the API without breaking the future Android client. |
-| **Single `ApiError` envelope** | Every failure returns `{ timestamp, status, error, message, path, details }` — web and mobile clients parse errors identically. |
-| **Stateless JWT-ready design** | Auth endpoints exist as validation-only stubs (501). Real registration/sign-in arrives in Phase 2 with the same URL contract. |
-| **Flyway for schema** | Migrations are version-controlled and run automatically at startup; the same SQL works on a local PostgreSQL or a Supabase project. |
-| **Configuration via env vars** | No secrets in code or git. Spring reads `SPRING_DATASOURCE_*`, Vite reads `VITE_*`. |
-| **Independent dev servers** | Frontend (`vite`) and backend (`mvn spring-boot:run`) run separately; CORS and the Vite proxy are configured for local development. |
-| **No local/embedded AI** | Per project rules, AI features are deferred to later phases and will be served by remote AI services, never bundled locally. |
+| **REST under `/api/v1`** | Versioned prefix lets us evolve the API without breaking future clients. |
+| **Single `ApiError` envelope** | Every failure returns `{ timestamp, status, error, message, path, details }` — web and mobile parse errors identically. |
+| **Session cookies, not tokens** | The `JSESSIONID` is HttpOnly, so XSS cannot read it. Nothing is stored in `localStorage`. |
+| **CSRF token in the session** | The token is fetched from `/auth/csrf` and echoed in `X-CSRF-TOKEN`. Never a JS-readable cookie. |
+| **Authorization at the service layer** | Controllers do no access checks; `AcademicScopeService` and `SyllabusService` are the only choke points. |
+| **404 rather than 403 for out-of-scope records** | An attacker must not learn that a record exists. |
+| **Flyway for schema** | Version-controlled, runs on startup; the same SQL works locally or on Supabase. |
+| **Never edit an applied migration** | `V1`–`V3` are frozen. Every change is a new additive `V<n>`. |
+| **Storage abstraction** | `FileStorageService` keeps the local provider swappable for private cloud object storage later. |
+| **Deterministic extraction** | No AI, no API key. Same input always yields the same outline; low confidence returns text, not invention. |
+| **Config via env vars** | No secrets in code or git. |
 
 ## Backend layout
 
 ```
-backend/
-├── pom.xml
-└── src/main/java/com/professor/assistant/
-    ├── AssistantApplication.java        # Spring Boot entry point
-    ├── config/CorsConfig.java           # Origins from app.cors.allowed-origins
-    ├── controller/
-    │   ├── HealthController.java        # GET /api/v1/health (incl. DB check)
-    │   └── AuthController.java          # POST /api/v1/auth/{register,login} (501 stubs)
-    ├── domain/                          # User entity, Role enum
-    ├── dto/                             # RegisterRequest, LoginRequest (validated records)
-    ├── exception/                       # ApiError envelope + GlobalExceptionHandler
-    ├── repository/                      # Spring Data JPA repositories
-    └── web/                             # AccessLogFilter, container ErrorController
+backend/src/main/java/com/professor/assistant/
+  config/       CorsConfig, SecurityConfig, SyllabusProperties, OpenApiConfig
+  controller/   Health, Auth, Admin*, Academic, TeacherSyllabus, StudentSyllabus
+  domain/       User, Role, AcademicClass, Subject, Syllabus + children
+  dto/          Records with Bean Validation; PageResponse
+  exception/    ApiError + GlobalExceptionHandler
+  repository/   Spring Data JPA
+  security/     AppUserDetails (principal carrying the user id)
+  service/      AuthService, Academic{Scope,Query,Structure}Service, SyllabusService
+  storage/      FileStorageService + LocalPrivateFileStorageService
+  syllabus/     ExtractionService, TextExtractors, StructureParser, Validator
+  web/          Principal helper, REST entry point / denied handler, error controllers
 ```
+
+### Data model
+
+| Phase | Tables |
+| --- | --- |
+| 1 | `app_user` |
+| 2 | `app_user.status` (column added by `V2`) |
+| 3 | `department`, `academic_program`, `academic_year`, `semester`, `subject`, `academic_class`, `class_subject`, `teaching_assignment`, `enrollment` |
+| 4 | `syllabus`, `syllabus_unit`, `syllabus_topic`, `syllabus_subtopic`, `syllabus_learning_outcome` |
+
+`academic_class` is the table name because `CLASS` is a reserved SQL word.
+
+Phase 4 links to the Phase 3 entities (`academic_class`, `subject`,
+`semester`) rather than duplicating them.
 
 ## Frontend layout
 
 ```
-frontend/
-├── src/
-│   ├── api/client.ts                    # Typed fetch wrapper → ApiError
-│   ├── components/
-│   │   ├── layout/                      # Navbar, Footer, Layout (Outlet shell)
-│   │   └── ui/                          # Button, Input, Select, Textarea, Card, Badge, Alert
-│   ├── pages/                           # Landing, Login, Register, role dashboards, 404
-│   └── lib/utils.ts                     # cx() classname helper
+frontend/src/
+  api/client.ts       Typed fetch wrapper, ApiError, CSRF + credential handling
+  auth/               AuthContext (session), ProtectedRoute (role guard)
+  components/
+    academic/         ClassBrowser
+    layout/           Navbar, Footer, Layout
+    ui/               Button, Input, Select, Textarea, FileInput, Card, Badge, Alert
+  pages/              Landing, Login, Register, Dashboards, AdminAcademic,
+                      TeacherSyllabi, StudentSyllabi
 ```
-
-## Data model (Phase 1)
-
-`app_user` — one row per platform user:
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | BIGINT | Auto-generated identity |
-| `email` | VARCHAR(255) | Unique |
-| `password_hash` | VARCHAR(255) | Not populated until Phase 2 |
-| `full_name` | VARCHAR(100) | |
-| `role` | VARCHAR(20) | `STUDENT`, `TEACHER`, or `ADMIN` (check constraint) |
-| `created_at` / `updated_at` | TIMESTAMP | Maintained by the entity |
 
 ## Error model
 
@@ -90,21 +104,43 @@ All endpoints return the same envelope on failure:
   "error": "Bad Request",
   "message": "Validation failed",
   "path": "/api/v1/auth/register",
-  "details": {
-    "fields": [{ "field": "email", "message": "Email must be a valid address" }]
-  }
+  "details": { "fields": [{ "field": "email", "message": "Email must be a valid address" }] }
 }
 ```
 
-Status codes used in Phase 1: `200` OK, `400` validation/body errors,
-`404` unknown endpoint, `405` wrong HTTP method, `501` feature not
-implemented yet, `503` health check with DB down, `500` unexpected.
+## Syllabus pipeline (Phase 4)
 
-## What is explicitly deferred
+```
+multipart upload
+   → validator   extension → MIME type → magic bytes → size
+   → storage     random key, private directory
+   → extractor   PDFBox / POI / UTF-8, page- and character-capped
+   → parser      deterministic Unit / Topic / Subtopic detection
+   → syllabus    EXTRACTING → REVIEW_REQUIRED  (or EXTRACTION_FAILED)
+   → teacher     edits the tree, then APPROVED or REJECTED
+   → student     reads APPROVED rows for enrolled classes only
+```
 
-- Authentication (registration, sign-in, password hashing, sessions/JWT)
-- Courses, assignments, grading, attendance, messaging
-- AI features (lesson prep, tutoring, analytics)
+Extraction runs synchronously in this phase, bounded by the configured
+limits. A background worker can later be introduced behind the same
+service interface without changing controllers.
+
+### File handling safety
+
+- Filenames are sanitized for display only; a random 32-hex key is the sole
+  filesystem identifier.
+- Storage keys are validated against a strict pattern and re-checked to
+  resolve inside the storage root, so traversal keys cannot escape.
+- Uploads are validated on extension, MIME type **and** magic bytes; a
+  mismatch is rejected rather than silently re-typed.
+- Extracted document text is never logged.
+
+## What is deferred
+
+- OCR for scanned documents
+- AI-generated notes, PPTs, assignments, MCQs (later phases)
+- Private cloud object storage (the interface is ready; only a local
+  provider is configured)
 - The Android application (will consume the same `/api/v1` contract)
 
 See [docs/api.md](api.md) for the API surface and [docs/setup.md](setup.md)

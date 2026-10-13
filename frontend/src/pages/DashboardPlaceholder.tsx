@@ -68,9 +68,22 @@ export default function DashboardPlaceholder() {
             {user.fullName} · {user.email}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void logout()}>
-          Sign out
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {/* ADMIN already has a dedicated card below with this link. */}
+          {user.role === "TEACHER" && (
+            <Button>
+              <Link to="/teacher/syllabi">Manage syllabi</Link>
+            </Button>
+          )}
+          {user.role === "STUDENT" && (
+            <Button>
+              <Link to="/student/syllabi">My syllabi</Link>
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => void logout()}>
+            Sign out
+          </Button>
+        </div>
       </div>
 
       {user.role === "ADMIN" ? (

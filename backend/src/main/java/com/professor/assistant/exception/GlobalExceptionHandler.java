@@ -18,8 +18,11 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import com.professor.assistant.storage.StorageException;
 
 /**
  * Converts every thrown exception into the {@link ApiError} envelope, so
@@ -199,16 +202,68 @@ public class GlobalExceptionHandler {
         .body(ApiError.of(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI()));
   }
 
+  @ExceptionHandler(InvalidUploadException.class)
+  public ResponseEntity<ApiError> handleInvalidUpload(
+      InvalidUploadException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.BAD_REQUEST)
+        .body(ApiError.of(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI()));
+  }
+
+  @ExceptionHandler(InvalidSyllabusStateException.class)
+  public ResponseEntity<ApiError> handleInvalidSyllabusState(
+      InvalidSyllabusStateException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.CONFLICT)
+        .body(ApiError.of(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI()));
+  }
+
+  /**
+   * The servlet container rejects the body before any of our code runs when
+   * it exceeds the multipart limit, so this is the only place that size
+   * failure can surface.
+   */
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  public ResponseEntity<ApiError> handleUploadTooLarge(
+      MaxUploadSizeExceededException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.PAYLOAD_TOO_LARGE)
+        .body(
+            ApiError.of(
+                HttpStatus.PAYLOAD_TOO_LARGE,
+                "The uploaded file is too large for this server",
+                request.getRequestURI()));
+  }
+
+  @ExceptionHandler(StorageException.class)
+  public ResponseEntity<ApiError> handleStorage(
+      StorageException ex, HttpServletRequest request) {
+    log.warn("Private storage failure for {}", request.getRequestURI());
+    return ResponseEntity
+        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+        .body(
+            ApiError.of(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "The stored file could not be accessed",
+                request.getRequestURI()));
+  }
+
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<ApiError> handleIntegrity(
       DataIntegrityViolationException ex, HttpServletRequest request) {
-    log.warn("Data integrity violation: {}", ex.toString());
+    // Log the root cause so the offending constraint is diagnosable. The
+    // client only ever sees a generic message.
+    Throwable root = ex;
+    while (root.getCause() != null) {
+      root = root.getCause();
+    }
+    log.warn("Data integrity violation for {}: {}", request.getRequestURI(), root.toString());
     return ResponseEntity
         .status(HttpStatus.CONFLICT)
         .body(
             ApiError.of(
                 HttpStatus.CONFLICT,
-                "An account with this email address already exists",
+                "That record conflicts with existing data",
                 request.getRequestURI()));
   }
 

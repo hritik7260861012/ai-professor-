@@ -79,7 +79,10 @@ async function request<T>(
   body?: unknown,
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  if (body !== undefined) {
+  // A FormData body must not carry an explicit Content-Type: the browser has
+  // to set the multipart boundary itself.
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body !== undefined && !isFormData) {
     headers["Content-Type"] = "application/json";
   }
   if (UNSAFE_METHODS.has(method)) {
@@ -94,7 +97,8 @@ async function request<T>(
       // Required for the HttpOnly session cookie to be sent.
       credentials: "include",
       headers: Object.keys(headers).length ? headers : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body:
+        body === undefined ? undefined : isFormData ? (body as FormData) : JSON.stringify(body),
     });
   } catch {
     // Network-level failure (backend offline, CORS block, DNS failure).
@@ -201,6 +205,116 @@ export const adminApi = {
     api.post<UserDto>("/admin/users", payload),
   changeRole: (id: number, role: Role) =>
     api.patch<UserDto>(`/admin/users/${id}/role`, { role }),
+};
+
+/** Syllabus lifecycle, mirroring SyllabusStatus on the backend. */
+export type SyllabusStatus =
+  | "UPLOADED"
+  | "EXTRACTING"
+  | "EXTRACTION_FAILED"
+  | "REVIEW_REQUIRED"
+  | "APPROVED"
+  | "REJECTED";
+
+export interface SyllabusMeta {
+  id: number;
+  classId: number;
+  classCode: string;
+  className: string;
+  subjectId: number;
+  subjectCode: string;
+  subjectName: string;
+  semesterId: number;
+  semesterName: string;
+  academicYearName: string;
+  uploadedById: number;
+  uploadedByName: string;
+  originalFilename: string;
+  contentType: string;
+  fileSize: number;
+  status: SyllabusStatus;
+  version: number;
+  current: boolean;
+  extractionError: string | null;
+  reviewNote: string | null;
+  reviewedById: number | null;
+  reviewedAt: string | null;
+  uploadedAt: string;
+  updatedAt: string;
+}
+
+export interface SyllabusUnitView {
+  id?: number | null;
+  title: string;
+  position: number;
+  topics: SyllabusTopicView[];
+}
+
+export interface SyllabusTopicView {
+  id?: number | null;
+  title: string;
+  position: number;
+  subtopics: string[];
+}
+
+export interface SyllabusOutcomeView {
+  id?: number | null;
+  statement: string;
+  position: number;
+  unitId: number | null;
+}
+
+export interface SyllabusDetail {
+  syllabus: SyllabusMeta;
+  units: SyllabusUnitView[];
+  learningOutcomes: SyllabusOutcomeView[];
+  /** Raw extracted text, kept so the teacher can correct bad parsing. */
+  extractedText: string | null;
+  /** Extraction/parsing guidance; null when everything went cleanly. */
+  warning: string | null;
+}
+
+export interface SyllabusStructurePayload {
+  units: Array<{ title: string; topics: Array<{ title: string; subtopics: string[] }> }>;
+  learningOutcomes: Array<{ statement: string; unitIndex: number | null }>;
+}
+
+export const syllabusApi = {
+  /** Multipart upload; CSRF and credentials are handled by the client. */
+  upload: (classId: number, subjectId: number, file: File) => {
+    const form = new FormData();
+    form.append("classId", String(classId));
+    form.append("subjectId", String(subjectId));
+    form.append("file", file);
+    return api.post<SyllabusDetail>("/teacher/syllabi", form);
+  },
+
+  listMine: (page = 0, size = 20) =>
+    api.get<PageResponse<SyllabusMeta>>(`/teacher/syllabi${query({ page, size })}`),
+
+  byId: (id: number) => api.get<SyllabusDetail>(`/teacher/syllabi/${id}`),
+
+  downloadUrl: (id: number) => `${BASE_URL}/teacher/syllabi/${id}/file`,
+
+  extractedContent: (id: number) =>
+    api.get<SyllabusDetail>(`/teacher/syllabi/${id}/extracted-content`),
+
+  updateStructure: (id: number, structure: SyllabusStructurePayload) =>
+    api.put<SyllabusDetail>(`/teacher/syllabi/${id}/structure`, structure),
+
+  approve: (id: number) => api.post<SyllabusDetail>(`/teacher/syllabi/${id}/approve`),
+
+  reject: (id: number, reason: string) =>
+    api.post<SyllabusDetail>(`/teacher/syllabi/${id}/reject`, { reason }),
+
+  retryExtraction: (id: number) =>
+    api.post<SyllabusDetail>(`/teacher/syllabi/${id}/retry-extraction`),
+
+  remove: (id: number) => api.del<void>(`/teacher/syllabi/${id}`),
+
+  /** Approved syllabi for the signed-in student's enrollments. */
+  studentList: () => api.get<SyllabusDetail[]>("/student/syllabi"),
+  studentById: (id: number) => api.get<SyllabusDetail>(`/student/syllabi/${id}`),
 };
 
 /* ---------------------------- Academic structure --------------------------- */

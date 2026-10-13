@@ -9,6 +9,12 @@ spring:
   flyway:
     enabled: true
 
+app:
+  syllabus:
+    # Tests must never write into the project directory; use a temp folder
+    # so a test run leaves no artefacts behind.
+    storage-directory: ${java.io.tmpdir}/professor-assistant-test-syllabi
+
 logging:
   level:
     com.professor.assistant: WARN

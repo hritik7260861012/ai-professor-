@@ -33,6 +33,10 @@ logs/
 coverage/
 .nyc_output/
 
+# Phase 4: private storage for uploaded syllabus files. Never commit
+# student documents.
+private-storage/
+
 # Misc
 *.local
 *.bak

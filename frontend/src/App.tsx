@@ -9,6 +9,8 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Register from "./pages/Register";
+import StudentSyllabi from "./pages/StudentSyllabi";
+import TeacherSyllabi from "./pages/TeacherSyllabi";
 
 export default function App() {
   return (
@@ -44,6 +46,24 @@ export default function App() {
             }
           />
           <Route path="*" element={<NotFound />} />
+        </Route>
+        <Route
+          element={
+            <ProtectedRoute roles={["TEACHER"]}>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/teacher/syllabi" element={<TeacherSyllabi />} />
+        </Route>
+        <Route
+          element={
+            <ProtectedRoute roles={["STUDENT"]}>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/student/syllabi" element={<StudentSyllabi />} />
         </Route>
         <Route
           element={

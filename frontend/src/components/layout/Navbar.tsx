@@ -9,6 +9,20 @@ const publicLinks = [
   { to: "/#roles", label: "Roles", external: true },
 ];
 
+/** Role-specific workspace links, shown only when signed in. */
+function roleLink(user: { role: string }) {
+  switch (user.role) {
+    case "TEACHER":
+      return { to: "/teacher/syllabi", label: "My syllabi" };
+    case "STUDENT":
+      return { to: "/student/syllabi", label: "My syllabi" };
+    case "ADMIN":
+      return { to: "/admin/academic", label: "Academic structure" };
+    default:
+      return null;
+  }
+}
+
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
@@ -72,6 +86,21 @@ export function Navbar() {
               }
             >
               Dashboard
+            </NavLink>
+          )}
+          {user && roleLink(user) && (
+            <NavLink
+              to={roleLink(user)!.to}
+              className={({ isActive }) =>
+                cx(
+                  "rounded-lg px-3 py-2 text-sm font-medium",
+                  isActive
+                    ? "bg-brand-50 text-brand-700"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                )
+              }
+            >
+              {roleLink(user)!.label}
             </NavLink>
           )}
         </nav>
@@ -152,6 +181,20 @@ export function Navbar() {
                 }
               >
                 Dashboard
+              </NavLink>
+            )}
+            {user && roleLink(user) && (
+              <NavLink
+                to={roleLink(user)!.to}
+                onClick={() => setOpen(false)}
+                className={({ isActive }) =>
+                  cx(
+                    "block rounded-lg px-3 py-2.5 text-sm font-medium",
+                    isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
+                  )
+                }
+              >
+                {roleLink(user)!.label}
               </NavLink>
             )}
             <div className="flex gap-2 pt-2">

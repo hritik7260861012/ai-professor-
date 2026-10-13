@@ -137,6 +137,52 @@ export function Select({ label, error, options, className, id, ...props }: Selec
 }
 
 /* ------------------------------------------------------------------ */
+/* FileInput                                                           */
+/* ------------------------------------------------------------------ */
+
+interface FileInputProps extends InputHTMLAttributes<HTMLInputElement> {
+  label?: string;
+  error?: string;
+  hint?: string;
+}
+
+/**
+ * Accessible file picker. A visually hidden native input is driven by a
+ * styled button so the control looks like the rest of the form while
+ * remaining keyboard and screen-reader operable.
+ */
+export function FileInput({ label, error, hint, className, id, ...props }: FileInputProps) {
+  const inputId = id ?? (label ? label.toLowerCase().replace(/\s+/g, "-") : undefined);
+  return (
+    <div className="w-full">
+      {label && <Label htmlFor={inputId}>{label}</Label>}
+      <input
+        id={inputId}
+        type="file"
+        className={cx(
+          "block w-full cursor-pointer rounded-lg border bg-white text-sm text-slate-900",
+          "file:mr-3 file:cursor-pointer file:rounded-l-lg file:border-0 file:bg-slate-100",
+          "file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-slate-700",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+          error ? "border-red-400" : "border-slate-300",
+          className,
+        )}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error && inputId ? `${inputId}-error` : undefined}
+        {...props}
+      />
+      {error ? (
+        <p id={inputId ? `${inputId}-error` : undefined} className="mt-1 text-xs text-red-600" role="alert">
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="mt-1 text-xs text-slate-500">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Label                                                               */
 /* ------------------------------------------------------------------ */
 

@@ -10,16 +10,22 @@ const publicLinks = [
 ];
 
 /** Role-specific workspace links, shown only when signed in. */
-function roleLink(user: { role: string }) {
+function roleLinks(user: { role: string }): Array<{ to: string; label: string }> {
   switch (user.role) {
     case "TEACHER":
-      return { to: "/teacher/syllabi", label: "My syllabi" };
+      return [
+        { to: "/teacher/syllabi", label: "My syllabi" },
+        { to: "/teacher/content", label: "AI content" },
+      ];
     case "STUDENT":
-      return { to: "/student/syllabi", label: "My syllabi" };
+      return [
+        { to: "/student/syllabi", label: "My syllabi" },
+        { to: "/student/content", label: "Study material" },
+      ];
     case "ADMIN":
-      return { to: "/admin/academic", label: "Academic structure" };
+      return [{ to: "/admin/academic", label: "Academic structure" }];
     default:
-      return null;
+      return [];
   }
 }
 
@@ -88,21 +94,23 @@ export function Navbar() {
               Dashboard
             </NavLink>
           )}
-          {user && roleLink(user) && (
-            <NavLink
-              to={roleLink(user)!.to}
-              className={({ isActive }) =>
-                cx(
-                  "rounded-lg px-3 py-2 text-sm font-medium",
-                  isActive
-                    ? "bg-brand-50 text-brand-700"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-                )
-              }
-            >
-              {roleLink(user)!.label}
-            </NavLink>
-          )}
+          {user &&
+            roleLinks(user).map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                className={({ isActive }) =>
+                  cx(
+                    "rounded-lg px-3 py-2 text-sm font-medium",
+                    isActive
+                      ? "bg-brand-50 text-brand-700"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  )
+                }
+              >
+                {link.label}
+              </NavLink>
+            ))}
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
@@ -183,20 +191,22 @@ export function Navbar() {
                 Dashboard
               </NavLink>
             )}
-            {user && roleLink(user) && (
-              <NavLink
-                to={roleLink(user)!.to}
-                onClick={() => setOpen(false)}
-                className={({ isActive }) =>
-                  cx(
-                    "block rounded-lg px-3 py-2.5 text-sm font-medium",
-                    isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
-                  )
-                }
-              >
-                {roleLink(user)!.label}
-              </NavLink>
-            )}
+            {user &&
+              roleLinks(user).map((link) => (
+                <NavLink
+                  key={link.to}
+                  to={link.to}
+                  onClick={() => setOpen(false)}
+                  className={({ isActive }) =>
+                    cx(
+                      "block rounded-lg px-3 py-2.5 text-sm font-medium",
+                      isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
+                    )
+                  }
+                >
+                  {link.label}
+                </NavLink>
+              ))}
             <div className="flex gap-2 pt-2">
               {user ? (
                 <Button

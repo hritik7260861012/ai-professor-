@@ -9,7 +9,9 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Register from "./pages/Register";
+import StudentContent from "./pages/StudentContent";
 import StudentSyllabi from "./pages/StudentSyllabi";
+import TeacherContent from "./pages/TeacherContent";
 import TeacherSyllabi from "./pages/TeacherSyllabi";
 
 export default function App() {
@@ -55,6 +57,7 @@ export default function App() {
           }
         >
           <Route path="/teacher/syllabi" element={<TeacherSyllabi />} />
+          <Route path="/teacher/content" element={<TeacherContent />} />
         </Route>
         <Route
           element={
@@ -64,6 +67,7 @@ export default function App() {
           }
         >
           <Route path="/student/syllabi" element={<StudentSyllabi />} />
+          <Route path="/student/content" element={<StudentContent />} />
         </Route>
         <Route
           element={

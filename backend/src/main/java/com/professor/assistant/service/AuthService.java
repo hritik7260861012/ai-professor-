@@ -96,6 +96,62 @@ public class AuthService {
     return createUser(fullName, email, password, Role.ADMIN);
   }
 
+  /**
+   * Whether the deployment already has an administrator.
+   *
+   * <p>The bootstrap runner consults this so that leaving the bootstrap
+   * variables set cannot mint extra administrators on later restarts.
+   */
+  @Transactional(readOnly = true)
+  public boolean adminExists() {
+    return userRepository.existsByRole(Role.ADMIN);
+  }
+
+  /**
+   * Result of a local-development admin password reset.
+   *
+   * @param outcome what happened, for a clear log line
+   */
+  public enum AdminPasswordReset {
+    RESET,
+    NO_SUCH_ACCOUNT,
+    NOT_AN_ADMIN
+  }
+
+  /**
+   * Replaces an existing administrator's password.
+   *
+   * <p>Exists for local development only, where the bootstrap password is
+   * unknown or was changed by hand. It deliberately refuses to create an
+   * account: {@link #NO_SUCH_ACCOUNT} is returned rather than provisioning a
+   * new admin, so this can never be used to add one.
+   *
+   * <p>Only an account that already holds {@link Role#ADMIN} may be reset, so
+   * a stray variable cannot rewrite a student's password.
+   *
+   * <p>The new password is hashed with the same BCrypt encoder used
+   * everywhere else and is never logged.
+   */
+  @Transactional
+  public AdminPasswordReset resetAdminPassword(String email, String newPassword) {
+    User user =
+        userRepository
+            .findByEmail(normalize(email))
+            .orElse(null);
+    if (user == null) {
+      return AdminPasswordReset.NO_SUCH_ACCOUNT;
+    }
+    if (user.getRole() != Role.ADMIN) {
+      return AdminPasswordReset.NOT_AN_ADMIN;
+    }
+    // Re-encoding produces a fresh salt, so this also produces a different
+    // hash for an identical password. That is harmless and avoids leaking
+    // "the password was already this" through the stored value.
+    user.changePasswordHash(passwordEncoder.encode(newPassword));
+    userRepository.save(user);
+    return AdminPasswordReset.RESET;
+  }
+
   public Optional<User> findByEmail(String email) {
     return userRepository.findByEmail(normalize(email));
   }

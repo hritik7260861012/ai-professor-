@@ -248,6 +248,48 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()));
   }
 
+  /* ------------------------------- Phase 5 -------------------------------- */
+
+  /**
+   * No AI provider credential configured. 503 rather than 400, because the
+   * request is valid and the condition is server-side; the frontend shows a
+   * configuration message rather than pretending generation failed.
+   */
+  @ExceptionHandler(AiNotConfiguredException.class)
+  public ResponseEntity<ApiError> handleAiNotConfigured(
+      AiNotConfiguredException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.SERVICE_UNAVAILABLE)
+        .body(ApiError.of(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request.getRequestURI()));
+  }
+
+  /** Cost or capacity guard hit. 429 so clients can distinguish it from bad input. */
+  @ExceptionHandler(GenerationQuotaExceededException.class)
+  public ResponseEntity<ApiError> handleQuota(
+      GenerationQuotaExceededException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.TOO_MANY_REQUESTS)
+        .body(
+            ApiError.of(
+                HttpStatus.TOO_MANY_REQUESTS,
+                ex.getMessage(),
+                request.getRequestURI(),
+                Map.of("code", ex.errorCode())));
+  }
+
+  /**
+   * Config-driven bound on a generation request (item count, instruction
+   * length). 400, unlike the sibling 404 handler below: nothing is missing,
+   * the options the caller sent are simply out of range.
+   */
+  @ExceptionHandler(InvalidGenerationRequestException.class)
+  public ResponseEntity<ApiError> handleInvalidGenerationRequest(
+      InvalidGenerationRequestException ex, HttpServletRequest request) {
+    return ResponseEntity
+        .status(HttpStatus.BAD_REQUEST)
+        .body(ApiError.of(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI()));
+  }
+
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<ApiError> handleIntegrity(
       DataIntegrityViolationException ex, HttpServletRequest request) {

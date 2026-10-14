@@ -45,6 +45,14 @@
       <groupId>org.flywaydb</groupId>
       <artifactId>flyway-core</artifactId>
     </dependency>
+    <!-- Flyway 10 moved per-database support out of flyway-core. Without this
+         artifact migrations run on H2 (still in core) but fail at startup
+         against PostgreSQL with "Unsupported Database: PostgreSQL x.y".
+         The version is managed by the Spring Boot parent. -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>

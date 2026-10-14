@@ -317,7 +317,216 @@ export const syllabusApi = {
   studentById: (id: number) => api.get<SyllabusDetail>(`/student/syllabi/${id}`),
 };
 
-/* ---------------------------- Academic structure --------------------------- */
+/* --------------------------- AI content generation ------------------------ */
+
+/**
+ * Phase 5 generation types. These mirror the backend enums exactly; the
+ * server rejects anything it does not recognise.
+ */
+export type GenerationContentType =
+  | "UNIT_NOTES"
+  | "TEACHER_STUDY_MATERIAL"
+  | "PPT_SLIDES"
+  | "ASSIGNMENTS_QUESTIONS"
+  | "MCQS"
+  | "QUICK_REVISION";
+
+export type GenerationLanguage = "ENGLISH" | "HINDI" | "HINGLISH";
+export type GenerationDifficulty = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+export type GenerationDetailLevel = "CONCISE" | "STANDARD" | "DETAILED";
+
+/** Job lifecycle. QUEUED/RUNNING are still in flight; the rest are terminal. */
+export type GenerationJobStatus =
+  | "QUEUED"
+  | "RUNNING"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED";
+
+/** Only these content types have a meaningful number of questions/slides. */
+export const COUNTABLE_CONTENT_TYPES: GenerationContentType[] = [
+  "PPT_SLIDES",
+  "ASSIGNMENTS_QUESTIONS",
+  "MCQS",
+];
+
+export type ContentAudience = "STUDENT" | "TEACHER";
+export type ContentReviewStatus =
+  | "DRAFT"
+  | "IN_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "OUTDATED";
+
+/** Mirrors ContentReviewStatus.isEditable() on the backend. */
+export function isReviewStatusEditable(status: ContentReviewStatus): boolean {
+  return status === "DRAFT" || status === "IN_REVIEW" || status === "REJECTED";
+}
+
+/** Backend bounds are re-checked server-side; these only improve the UX. */
+export const MAX_ITEMS = 30;
+export const MAX_INSTRUCTION_LENGTH = 500;
+
+export interface GenerationRequestPayload {
+  syllabusId: number;
+  /** null means the whole approved syllabus. */
+  unitId: number | null;
+  contentType: GenerationContentType;
+  language: GenerationLanguage;
+  detailLevel: GenerationDetailLevel;
+  difficulty: GenerationDifficulty;
+  itemCount: number;
+  includeAnswerKey: boolean;
+  instructions: string | null;
+}
+
+export interface GenerationJob {
+  id: number;
+  syllabusId: number;
+  syllabusVersion: number | null;
+  unitId: number | null;
+  unitTitle: string | null;
+  contentType: GenerationContentType;
+  language: GenerationLanguage;
+  detailLevel: GenerationDetailLevel;
+  difficulty: GenerationDifficulty;
+  itemCount: number | null;
+  instructions: string | null;
+  status: GenerationJobStatus;
+  attemptCount: number;
+  /** Safe machine-readable category; never contains provider internals. */
+  errorCode: string | null;
+  errorMessage: string | null;
+  providerName: string | null;
+  modelName: string | null;
+  contentId: number | null;
+  stale: boolean;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  note: string | null;
+}
+
+/** Only FAILED and CANCELLED jobs may be retried. */
+export function isRetryableStatus(status: GenerationJobStatus): boolean {
+  return status === "FAILED" || status === "CANCELLED";
+}
+
+export function isTerminalStatus(status: GenerationJobStatus): boolean {
+  return status === "COMPLETED" || status === "FAILED" || status === "CANCELLED";
+}
+
+export interface GeneratedContent {
+  id: number;
+  jobId: number | null;
+  syllabusId: number;
+  syllabusVersion: number | null;
+  subjectCode: string;
+  subjectName: string;
+  classCode: string;
+  unitId: number | null;
+  unitTitle: string | null;
+  contentType: GenerationContentType;
+  language: GenerationLanguage;
+  title: string;
+  body: string;
+  structuredJson: string | null;
+  audience: ContentAudience;
+  containsAnswerKey: boolean;
+  reviewStatus: ContentReviewStatus;
+  releasedToStudents: boolean;
+  rejectionReason: string | null;
+  providerName: string | null;
+  modelName: string | null;
+  stale: boolean;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
+}
+
+/**
+ * A teacher may edit this.
+ *
+ * The backend computes this too, but it is not part of the serialised DTO,
+ * so the same rule is applied here from the fields that are.
+ */
+export function isContentEditable(content: GeneratedContent): boolean {
+  return !content.stale && isReviewStatusEditable(content.reviewStatus);
+}
+
+/** Teacher study material can never be released, whatever the teacher asks. */
+export function isContentReleasable(content: GeneratedContent): boolean {
+  return content.audience === "STUDENT";
+}
+
+/**
+ * The student projection. Answer keys, provider metadata and rejection
+ * reasons do not exist on this type, so a UI bug cannot leak them.
+ */
+export interface StudentContent {
+  id: number;
+  syllabusId: number;
+  subjectCode: string;
+  subjectName: string;
+  classCode: string;
+  unitId: number | null;
+  unitTitle: string | null;
+  contentType: GenerationContentType;
+  language: GenerationLanguage;
+  title: string;
+  body: string;
+  structuredJson: string | null;
+}
+
+export interface ContentEditPayload {
+  title: string | null;
+  body: string | null;
+  structuredJson: string | null;
+}
+
+export const teacherContentApi = {
+  /** 202 Accepted with the new job; generation itself happens in the background. */
+  submit: (payload: GenerationRequestPayload) =>
+    api.post<GenerationJob>("/teacher/content/generations", payload),
+
+  listJobs: (page = 0, size = 20) =>
+    api.get<PageResponse<GenerationJob>>(
+      `/teacher/content/generations${query({ page, size })}`,
+    ),
+
+  job: (id: number) => api.get<GenerationJob>(`/teacher/content/generations/${id}`),
+
+  retry: (id: number) =>
+    api.post<GenerationJob>(`/teacher/content/generations/${id}/retry`),
+
+  listForSyllabus: (syllabusId: number, page = 0, size = 20) =>
+    api.get<PageResponse<GeneratedContent>>(
+      `/teacher/content/syllabi/${syllabusId}/content${query({ page, size })}`,
+    ),
+
+  recentForSyllabus: (syllabusId: number) =>
+    api.get<GeneratedContent[]>(`/teacher/content/syllabi/${syllabusId}/content/recent`),
+
+  content: (id: number) => api.get<GeneratedContent>(`/teacher/content/${id}`),
+
+  /** Blank fields are left untouched by the server. */
+  update: (id: number, payload: ContentEditPayload) =>
+    api.put<GeneratedContent>(`/teacher/content/${id}`, payload),
+
+  approve: (id: number, releaseToStudents: boolean) =>
+    api.post<GeneratedContent>(`/teacher/content/${id}/approve`, { releaseToStudents }),
+
+  reject: (id: number, reason: string) =>
+    api.post<GeneratedContent>(`/teacher/content/${id}/reject`, { reason }),
+
+  remove: (id: number) => api.del<void>(`/teacher/content/${id}`),
+};
+
+export const studentContentApi = {
+  /** Released, approved, student-facing content for the caller's enrollments. */
+  list: () => api.get<StudentContent[]>("/student/content"),
+  byId: (id: number) => api.get<StudentContent>(`/student/content/${id}`),
+};
 
 export interface PageResponse<T> {
   content: T[];

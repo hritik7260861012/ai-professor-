@@ -14,6 +14,11 @@ app:
     # Tests must never write into the project directory; use a temp folder
     # so a test run leaves no artefacts behind.
     storage-directory: ${java.io.tmpdir}/professor-assistant-test-syllabi
+  ai:
+    # Deterministic provider: every Phase 5 test runs without a real API key
+    # and never makes a live AI call.
+    provider: MOCK
+    model: mock-model-v1
 
 logging:
   level:

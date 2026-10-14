@@ -106,6 +106,20 @@ public class User {
     this.role = role;
   }
 
+  /**
+   * Replaces the stored password hash.
+   *
+   * <p>Named rather than exposed as a generic setter so that a password
+   * change is always a deliberate act. The hash is expected to be already
+   * encoded — this method never sees a raw password.
+   *
+   * <p>Normal account creation sets the hash once through the constructor;
+   * this exists for the local-development reset path.
+   */
+  public void changePasswordHash(String newHash) {
+    this.passwordHash = newHash;
+  }
+
   public AccountStatus getStatus() {
     return status;
   }
